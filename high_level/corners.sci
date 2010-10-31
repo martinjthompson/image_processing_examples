@@ -16,13 +16,16 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
 
+filename='testkb';
+img=imread(sprintf('../%s.pgm', filename));
+img=double(img); // convert to double so we can do non-integer maths
 sobelx=[1 2 1; 0 0 0; -1 -2 -1];
 ix=filter2(sobelx ,img);
-// iy=filter2(sobelx',img);
+iy=filter2(sobelx',img);
 ix2=ix.*ix;
 ixy=ix.*iy;
 iy2=iy.*iy;
 disp('Hello');
 c1=(ix2+iy2);
-c2=(4*ixy.*ixy + (ix2-iy2).^2).^0.5;
+c2=(4*ixy.*ixy + ((ix2-iy2).^2)).^0.5;
 corners=c1-c2;
