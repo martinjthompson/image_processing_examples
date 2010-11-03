@@ -12,7 +12,7 @@
 % 
 % THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
 % BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND 
-% NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+% NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
 % LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
 % CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE
 
@@ -25,8 +25,14 @@ iy=filter2(sobelx',img);
 ix2=ix.*ix;
 ixy=ix.*iy;
 iy2=iy.*iy;
-c1=(ix2+iy2);
-c2=(4*ixy.*ixy + ((ix2-iy2).^2)).^0.5;
-c=c1-c2;
-peaks=zeros(size(c));
-      
+
+window_size=1;
+window_range=-window_size:window_size;
+mask=ones(length(window_range));
+a=filter2(mask, ix2);
+b=filter2(mask, iy2);
+c=filter2(mask, ixy);
+
+c1=(a+b);
+c2=(4*(c.*c) + ((a-b).^2)).^0.5;
+cornerness=c1-c2;
