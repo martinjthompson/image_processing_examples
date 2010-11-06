@@ -19,20 +19,6 @@
 filename='testkb';
 img=imread(sprintf('../%s.pgm', filename));
 img=double(img); % convert to double so we can do non-integer maths
-sobelx=[1 2 1; 0 0 0; -1 -2 -1];
-ix=filter2(sobelx ,img);
-iy=filter2(sobelx',img);
-ix2=ix.*ix;
-ixy=ix.*iy;
-iy2=iy.*iy;
+cornerness=shi_tomasi(img);
+imwrite (cornerness./max(cornerness(:)), sprintf('%s_corners.png', filename));
 
-window_size=1;
-window_range=-window_size:window_size;
-mask=ones(length(window_range));
-a=filter2(mask, ix2);
-b=filter2(mask, iy2);
-c=filter2(mask, ixy);
-
-c1=(a+b);
-c2=(4*(c.*c) + ((a-b).^2)).^0.5;
-cornerness=c1-c2;
