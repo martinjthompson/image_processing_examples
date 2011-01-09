@@ -60,15 +60,16 @@ package body libv is
     procedure assert_equal (
         prefix        : string;
         got, expected : integer_vector;
-        level : severity_level := error) is
+        level : severity_level := error) is 
         variable g,e : integer;
+        constant top : integer := got'length-1;
     begin  -- procedure assert_equal
         assert got'length = expected'length
             report prefix & " length wrong.  Got " & integer'image(got'length)
             & " expected " & integer'image(expected'length)
             & "(difference=" & integer'image(got'length-expected'length) &")"
             severity level;
-        for i in 0 to got'length-1 loop
+        for i in 0 to top loop
             g := got(got'low+i);
             e := expected(expected'low+i);
             assert g = e
