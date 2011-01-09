@@ -143,11 +143,19 @@ begin  -- architecture test
             100, 100, 100, 100, 100, 000, 000
         );
     begin  -- process test1
+        -- test on a proper image
         i := pgm_read("testimage.pgm");
         assert_equal("PGM Width", i.width, 8);
         assert_equal("PGM Height", i.height, 4);
         assert i.pixels /= null report "pixels are null" severity error;
         assert_equal("PGM data", integer_vector(i.pixels.all), integer_vector(testdata));
+
+        -- make sure we return a non-image for the ASCII style PGM file
+        i := pgm_read("testimage_ascii.pgm");
+        assert_equal("ASCII PGM Width", i.width, 0);
+        assert_equal("ASCII PGM Height", i.height, 0);
+        assert i.pixels = null report "ASCII pixels should be null" severity error;
+        
         report "End of tests" severity note;
         wait;
     end process test1;
