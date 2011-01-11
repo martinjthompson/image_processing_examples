@@ -1,4 +1,5 @@
 #!/bin/bash
 ghdl -a --std=02 libv.vhd
 ghdl -a --std=02 pgm.vhd
+ghdl --elab-run tb_libv
 ghdl --elab-run tb_pgm

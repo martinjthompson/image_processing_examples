@@ -47,12 +47,22 @@ package pgm is
         i    : inout image;
         x, y : in    coordinate;
         val  : in    pixel);
+
+    function str (pixels : pixel_vector) return string;
 end package pgm;
 
 use std.textio.all;
 use work.libv.all;
 package body pgm is
-
+    function str (pixels : pixel_vector) return string is
+        variable s : string (1 to 4*pixels'length) := (others => ' ');
+    begin  -- function str
+        for i in pixels'range loop
+                                           --report "s" & str(s'length) & "-" & str(i*4);
+            s(1+(i*4) to 3+(i*4)) := str(pixels(i), 3);
+        end loop;  -- i
+        return s;
+    end function str;
     impure function pgm_read (
         filename : string)
         return image is
@@ -61,40 +71,39 @@ package body pgm is
         variable l      : line;
         variable s      : string(1 to 2);
         variable ints   : integer_vector(1 to 3);
+        variable int    : integer;
         variable count  : integer := ints'low;
         variable good   : boolean;
-        constant empty_image : pixel_vector := (0,0);
+        variable ch     : character;
     begin  -- function pgm_read
         -- setup some defaults
-        result.width := 0;
+        result.width  := 0;
         result.height := 0;
-        --result.pixels := new pixel_vector'(empty_image);
         file_open(pgmfile, filename, read_mode);
         readline(pgmfile, l);
         read(l, s(1));
         read(l, s(2), good);
-        if not good or s /= "P5" then
-            report "PGM file not P5 type" severity warning;
+        if not good or s /= "P2" then
+            report "PGM file not P2 type" severity warning;
             file_close(pgmfile);
             return result;
         end if;
-        loop                                -- read until we have 3 integers (width, height and colour depth).  
+        allints : loop                     -- read until we have 3 integers (width, height and colour depth).  
             loop
                 readline(pgmfile, l);
-                report "a" & l.all;
+                                           --report l.all;
                 exit when l.all(1) = '#';  -- skip comments;
-                report "b";
                 if l'length = 0 then
                     report "EOF reached in pgmfile before opening integers found" severity warning;
                     file_close(pgmfile);
                     return result;
                 end if;
-                report "c";
                 loop
-                    report "d" & l.all;
+                                           --report str(count) & "=" & l.all;
                     read(l, ints(count), good);
+                    exit         when not good;
                     count := count + 1;
-                    exit when not good;
+                    exit allints when count > ints'high;
                 end loop;
             end loop;
             exit when count > ints'high;
@@ -102,6 +111,25 @@ package body pgm is
         -- Now we have our header sorted. store it
         result.width  := ints(1);
         result.height := ints(2);
+        report "Got header " & str(result.width) & "," & str(result.height);
+        result.pixels := new pixel_vector(0 to result.width*result.height-1);
+        report str(result.pixels.all);
+        -- now read the pixels
+        count         := 0;
+        allpixels : loop
+            readline(pgmfile, l);
+            report "len:" & str(l'length);
+            exit when l = null;
+            exit when l'length = 0;
+            report l.all & "len:" & str(l'length);
+            loop
+                read(l, int, good);
+                report str(count) & "=" & str(int) & ":" & str(good);
+                exit allpixels when not good;
+                result.pixels(count) := int;
+                count := count + 1;
+            end loop;
+        end loop;
         return result;
     end function pgm_read;
     procedure pgm_write (
@@ -144,18 +172,18 @@ begin  -- architecture test
         );
     begin  -- process test1
         -- test on a proper image
-        i := pgm_read("testimage.pgm");
+        i := pgm_read("testimage_ascii.pgm");
         assert_equal("PGM Width", i.width, 8);
         assert_equal("PGM Height", i.height, 4);
         assert i.pixels /= null report "pixels are null" severity error;
         assert_equal("PGM data", integer_vector(i.pixels.all), integer_vector(testdata));
 
-        -- make sure we return a non-image for the ASCII style PGM file
-        i := pgm_read("testimage_ascii.pgm");
+        -- make sure we return a non-image for the binary-style PGM file
+        i := pgm_read("testimagei.pgm");
         assert_equal("ASCII PGM Width", i.width, 0);
         assert_equal("ASCII PGM Height", i.height, 0);
         assert i.pixels = null report "ASCII pixels should be null" severity error;
-        
+
         report "End of tests" severity note;
         wait;
     end process test1;
