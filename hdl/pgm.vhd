@@ -26,80 +26,94 @@ package pgm is
 
     subtype coordinate is natural;
     subtype pixel is integer range 0 to 255;
-    type pixel_vector is array (integer range <>) of pixel;
-    type pixel_vector_ptr is access pixel_vector;
-    type image is record  -- storage for all the relevant info
-        width, height : coordinate;
-        pixels        : pixel_vector_ptr;
-    end record image;
+    type pixel_array is array (natural range <>, natural range <>) of pixel;
+    type pixel_array_ptr is access pixel_array;
     impure function pgm_read (
         filename : string)
-        return image;
+        return pixel_array_ptr;
     procedure pgm_write (
-        filename : in    string;
-        i        : inout image);
+        filename : in string;
+        i        : in pixel_array);
 
-    procedure get_pixel (
-        i    : inout image;
-        x, y : in    coordinate;
-        val  : out   pixel);
-    procedure set_pixel (
-        i    : inout image;
-        x, y : in    coordinate;
-        val  : in    pixel);
-
-    function str (pixels : pixel_vector) return string;
+    procedure assert_equal (prefix : string; expected, got : pixel_array; level : severity_level := error);
+    -- Function: transpose
+    -- Useful for initialising arrays such that the first coordinate is the x-coord, but the initialisation can "look" like the
+    -- image in question within the code
+    function transpose (i : pixel_array) return pixel_array;
 end package pgm;
 
 use std.textio.all;
 use work.libv.all;
 package body pgm is
-    function str (pixels : pixel_vector) return string is
-        variable s : string (1 to 4*pixels'length) := (others => ' ');
-    begin  -- function str
-        for i in pixels'range loop
-                                           --report "s" & str(s'length) & "-" & str(i*4);
-            s(1+(i*4) to 3+(i*4)) := str(pixels(i), 3);
-        end loop;  -- i
-        return s;
-    end function str;
+
     impure function pgm_read (
         filename : string)
-        return image is
-        variable result : image;
-        file pgmfile    : text;
-        variable l      : line;
-        variable s      : string(1 to 2);
-        variable ints   : integer_vector(1 to 3);
-        variable int    : integer;
-        variable count  : integer := ints'low;
-        variable good   : boolean;
-        variable ch     : character;
+        return pixel_array_ptr is
+        impure function read_pixels(file pgmfile : text; width, height : coordinate) return pixel_array_ptr is
+            variable ret  : pixel_array_ptr;
+            variable x, y : coordinate;
+            variable l : line;
+        variable int           : integer;
+        variable good          : boolean;
+        begin
+          -- now read the pixels
+            x := 0;
+            y := 0;
+            ret := new pixel_array(0 to width-1, 0 to height-1);
+            allpixels : loop
+                readline(pgmfile, l);
+                exit when l = null;
+                exit when l'length = 0;
+                loop
+                    read(l, int, good);
+                    exit when not good;
+                    ret(x, y) := int;
+                    --report "("&str(x)&","&str(y)&")="&str(int);
+                    exit allpixels when x = width-1 and y = height-1;
+                    x         := x + 1;
+                    if x >= width then
+                        x := 0;
+                        y := y + 1;
+                    end if;
+                end loop;
+            end loop allpixels;
+            --report "End of read: " & str(x) &"," &str(y);
+            assert (x = width-1 and y = height-1) report "Don't seem to have read all the pixels I should have" severity warning;
+            return ret;
+        end function read_pixels;
+        file pgmfile : text;
+        variable width, height : coordinate;
+        variable l             : line;
+        variable s             : string(1 to 2);
+        variable ints          : integer_vector(1 to 3);
+        variable int           : integer;
+        variable good          : boolean;
+        variable ch            : character;
+        variable count : positive;
+        variable empty_image : pixel_array_ptr := NULL;
     begin  -- function pgm_read
-        -- setup some defaults
-        result.width  := 0;
-        result.height := 0;
+           -- setup some defaults
+        width  := 0;
+        height := 0;
         file_open(pgmfile, filename, read_mode);
         readline(pgmfile, l);
         read(l, s(1));
         read(l, s(2), good);
         if not good or s /= "P2" then
-            report "PGM file not P2 type" severity warning;
+            report "PGM file '"&filename&"' not P2 type" severity warning;
             file_close(pgmfile);
-            return result;
+            return empty_image;
         end if;
         allints : loop                     -- read until we have 3 integers (width, height and colour depth).  
             loop
                 readline(pgmfile, l);
-                                           --report l.all;
                 exit when l.all(1) = '#';  -- skip comments;
                 if l'length = 0 then
                     report "EOF reached in pgmfile before opening integers found" severity warning;
                     file_close(pgmfile);
-                    return result;
+                    return empty_image;
                 end if;
                 loop
-                                           --report str(count) & "=" & l.all;
                     read(l, ints(count), good);
                     exit         when not good;
                     count := count + 1;
@@ -108,50 +122,45 @@ package body pgm is
             end loop;
             exit when count > ints'high;
         end loop;
-        -- Now we have our header sorted. store it
-        result.width  := ints(1);
-        result.height := ints(2);
-        report "Got header " & str(result.width) & "," & str(result.height);
-        result.pixels := new pixel_vector(0 to result.width*result.height-1);
-        report str(result.pixels.all);
-        -- now read the pixels
-        count         := 0;
-        allpixels : loop
-            readline(pgmfile, l);
-            report "len:" & str(l'length);
-            exit when l = null;
-            exit when l'length = 0;
-            report l.all & "len:" & str(l'length);
-            loop
-                read(l, int, good);
-                report str(count) & "=" & str(int) & ":" & str(good);
-                exit allpixels when not good;
-                result.pixels(count) := int;
-                count := count + 1;
-            end loop;
-        end loop;
-        return result;
+                                           -- Now we have our header sorted. store it
+        width  := ints(1);
+        height := ints(2);
+        return read_pixels(pgmfile, width, height);
     end function pgm_read;
     procedure pgm_write (
         filename : in    string;
-        i        : inout image) is
+        i        : in pixel_array) is
     begin  -- procedure pgm_write
 
     end procedure pgm_write;
-    procedure get_pixel (
-        i    : inout image;
-        x, y : in    coordinate;
-        val  : out   pixel) is
-    begin  -- procedure get_pixel
 
-    end procedure get_pixel;
-    procedure set_pixel (
-        i    : inout image;
-        x, y : in    coordinate;
-        val  : in    pixel) is
-    begin  -- procedure set_pixel
+    procedure assert_equal (
+        prefix        : string;
+        expected, got : pixel_array;
+        level         : severity_level := error) is
+    begin  -- procedure assert_equal
+        assert_equal(prefix & "(width)", expected'length(1), got'length(1), level);
+        assert_equal(prefix & "(height)", expected'length(2), got'length(2), level);
+        for y in expected'range(2) loop
+            for x in expected'range(1) loop
+                assert expected(x,y)=got(x,y)
+                    report prefix & " (" & str(x) & "," & str(y) & ")" &
+                    str(expected(x,y)) & " /= " & str(got(x,y))
+                        severity level;
+            end loop;  -- x
+        end loop;  -- y
+    end procedure assert_equal;
 
-    end procedure set_pixel;
+    function transpose (i : pixel_array) return pixel_array is
+        variable ret : pixel_array(i'range(2), i'range(1));
+    begin  -- function transpose
+        for i1 in i'range(1) loop
+            for i2 in i'range(2) loop
+                ret(i2,i1) := i(i1,i2);
+            end loop;  -- i2
+        end loop;  -- i1
+        return ret;
+    end function transpose;
 end package body pgm;
 ----------------------------------------------------------------------------------------------------------------------------------
 
@@ -163,26 +172,25 @@ use work.pgm.all;
 architecture test of tb_pgm is
 begin  -- architecture test
     test1 : process is
-        variable i : image;
-        constant testdata : pixel_vector := (
-            000, 001, 002, 003, 005, 006, 007,
-            000, 000, 000, 000, 000, 000, 000,
-            255, 255, 255, 255, 255, 255, 255,
-            100, 100, 100, 100, 100, 000, 000
+        variable i : pixel_array_ptr;
+        -- Without the transpose function, we would have to present the initialisation data in a non-intuitive way.
+        constant testdata : pixel_array(0 to 7, 0 to 3) := transpose(pixel_array'(
+            (000, 027, 062, 095, 130, 163, 198, 232),
+            (000, 000, 000, 000, 000, 000, 000, 000),
+            (255, 255, 255, 255, 255, 255, 255, 255),
+            (100, 100, 100, 100, 100, 255, 255, 255))
         );
     begin  -- process test1
-        -- test on a proper image
+          -- test on a proper image
         i := pgm_read("testimage_ascii.pgm");
-        assert_equal("PGM Width", i.width, 8);
-        assert_equal("PGM Height", i.height, 4);
-        assert i.pixels /= null report "pixels are null" severity error;
-        assert_equal("PGM data", integer_vector(i.pixels.all), integer_vector(testdata));
+        assert i /= null report "pixels are null" severity error;
+        assert_equal("ASCII PGM Width", i.all'length(1), 8);
+        assert_equal("ASCII PGM Height", i.all'length(2), 4);
+        assert_equal("ASCII PGM data", i.all, testdata);
 
-        -- make sure we return a non-image for the binary-style PGM file
-        i := pgm_read("testimagei.pgm");
-        assert_equal("ASCII PGM Width", i.width, 0);
-        assert_equal("ASCII PGM Height", i.height, 0);
-        assert i.pixels = null report "ASCII pixels should be null" severity error;
+          -- make sure we return a non-image for the binary-style PGM file
+        i := pgm_read("testimage.pgm");
+        assert i = null report "Binary pixels should be null" severity error;
 
         report "End of tests" severity note;
         wait;

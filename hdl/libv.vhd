@@ -188,7 +188,7 @@ begin  -- architecture test
         assert str(true)  = "true" report "str(boolean) wrong" severity error;
         assert str(false, 1) = "F" report "str(boolean) wrong" severity error;
         assert str(true, 1)  = "T" report "str(boolean) wrong" severity error;
-        report "All tests complete" severity note;
+        report test'path_name & "Tests complete" severity note;
         wait;
     end process;
 
