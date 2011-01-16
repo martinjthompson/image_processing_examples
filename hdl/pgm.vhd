@@ -23,10 +23,9 @@
 -- WITH THE FILES OR THE USE OR OTHER DEALINGS IN THE FILES
 
 package pgm is
-
     subtype coordinate is natural;
     subtype pixel is integer range 0 to 255;
-    type pixel_array is array (natural range <>, natural range <>) of pixel;
+    type pixel_array is array (coordinate range <>, coordinate range <>) of pixel;
     type pixel_array_ptr is access pixel_array;
     impure function pgm_read (
         filename : string)
@@ -125,13 +124,30 @@ package body pgm is
                                            -- Now we have our header sorted. store it
         width  := ints(1);
         height := ints(2);
+        deallocate(l);
         return read_pixels(pgmfile, width, height);
     end function pgm_read;
     procedure pgm_write (
         filename : in    string;
         i        : in pixel_array) is
+        file pgmfile : text;
+        variable l : line;
     begin  -- procedure pgm_write
-
+        file_open(pgmfile, filename, write_mode);
+        write(l, string'("P2"));
+        writeline(pgmfile, l);
+        write(l, str(i'length(1)) & " " & str(i'length(2)));
+        writeline(pgmfile, l);
+        write(l, str(pixel'high));
+        writeline(pgmfile, l);
+        for y in i'range(2) loop
+            for x in i'range(1) loop
+                write(l, str(i(x,y)) & " ");
+            end loop;  -- x
+            writeline(pgmfile, l);
+        end loop;  -- y
+        file_close(pgmfile);
+        deallocate(l);
     end procedure pgm_write;
 
     procedure assert_equal (
@@ -180,6 +196,7 @@ begin  -- architecture test
             (255, 255, 255, 255, 255, 255, 255, 255),
             (100, 100, 100, 100, 100, 255, 255, 255))
         );
+        variable blacksquare : pixel_array(0 to 7, 0 to 7) := (others => (others => 0));
     begin  -- process test1
           -- test on a proper image
         i := pgm_read("testimage_ascii.pgm");
@@ -192,6 +209,14 @@ begin  -- architecture test
         i := pgm_read("testimage.pgm");
         assert i = null report "Binary pixels should be null" severity error;
 
+        -- Now create an image from scratch - a letter M
+        blacksquare(1,1) := 255; blacksquare(5,1) := 255;
+        blacksquare(1,2) := 255; blacksquare(2,2) := 255; blacksquare(4,2) := 255; blacksquare(5,2) := 255;
+        blacksquare(1,3) := 255; blacksquare(3,3) := 255; blacksquare(5,3) := 255;
+        blacksquare(1,4) := 255; blacksquare(5,4) := 255;
+        blacksquare(1,5) := 255; blacksquare(5,5) := 255;
+        blacksquare(1,6) := 255; blacksquare(5,6) := 255;
+        pgm_write("test_write.pgm", blacksquare);
         report "End of tests" severity note;
         wait;
     end process test1;
