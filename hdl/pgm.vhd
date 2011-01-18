@@ -38,7 +38,7 @@ package pgm is
     -- Function: transpose
     -- Useful for initialising arrays such that the first coordinate is the x-coord, but the initialisation can "look" like the
     -- image in question within the code
-    function transpose (i : pixel_array) return pixel_array;
+    function transpose (i          : pixel_array) return pixel_array;
 end package pgm;
 
 use std.textio.all;
@@ -48,50 +48,20 @@ package body pgm is
     impure function pgm_read (
         filename : string)
         return pixel_array_ptr is
-        impure function read_pixels(file pgmfile : text; width, height : coordinate) return pixel_array_ptr is
-            variable ret  : pixel_array_ptr;
-            variable x, y : coordinate;
-            variable l : line;
-        variable int           : integer;
-        variable good          : boolean;
-        begin
-          -- now read the pixels
-            x := 0;
-            y := 0;
-            ret := new pixel_array(0 to width-1, 0 to height-1);
-            allpixels : loop
-                readline(pgmfile, l);
-                exit when l = null;
-                exit when l'length = 0;
-                loop
-                    read(l, int, good);
-                    exit when not good;
-                    ret(x, y) := int;
-                    --report "("&str(x)&","&str(y)&")="&str(int);
-                    exit allpixels when x = width-1 and y = height-1;
-                    x         := x + 1;
-                    if x >= width then
-                        x := 0;
-                        y := y + 1;
-                    end if;
-                end loop;
-            end loop allpixels;
-            --report "End of read: " & str(x) &"," &str(y);
-            assert (x = width-1 and y = height-1) report "Don't seem to have read all the pixels I should have" severity warning;
-            return ret;
-        end function read_pixels;
-        file pgmfile : text;
-        variable width, height : coordinate;
-        variable l             : line;
-        variable s             : string(1 to 2);
-        variable ints          : integer_vector(1 to 3);
-        variable int           : integer;
-        variable good          : boolean;
-        variable ch            : character;
-        variable count : positive;
-        variable empty_image : pixel_array_ptr := NULL;
+        file pgmfile           : text;
+        variable width, height : coordinate;                     -- storage for image dimensions
+        variable l             : line;                           -- buffer for a line of text
+        variable s             : string(1 to 2);                 -- to check the P2 header
+        variable ints          : integer_vector(1 to 3);         -- store the first three integers (width, height and depth)
+        variable int           : integer;                        -- temporary storage
+        variable ch            : character;                      -- temporary storage
+        variable good          : boolean;                        -- to record whether a read is successful or not
+        variable count         : positive;                       -- keep track of how many numbers we've read
+        variable empty_image   : pixel_array_ptr := null;        -- return this on error
+        variable ret           : pixel_array_ptr;                -- actual return value
+        variable x, y          : coordinate;                     -- coordinate tracking
     begin  -- function pgm_read
-           -- setup some defaults
+        -- setup some defaults
         width  := 0;
         height := 0;
         file_open(pgmfile, filename, read_mode);
@@ -103,35 +73,57 @@ package body pgm is
             file_close(pgmfile);
             return empty_image;
         end if;
-        allints : loop                     -- read until we have 3 integers (width, height and colour depth).  
-            loop
+        allints : loop  -- read until we have 3 integers (width, height and colour depth).  
+            line_reading : loop
                 readline(pgmfile, l);
-                exit when l.all(1) = '#';  -- skip comments;
+                exit when l.all(1) = '#';                        -- skip comments;
                 if l'length = 0 then
                     report "EOF reached in pgmfile before opening integers found" severity warning;
                     file_close(pgmfile);
                     return empty_image;
                 end if;
-                loop
+                number_reading : loop
                     read(l, ints(count), good);
-                    exit         when not good;
+                    exit number_reading when not good;           -- need to read some more from the file
                     count := count + 1;
-                    exit allints when count > ints'high;
+                    exit allints        when count > ints'high;  -- got enough ints now
                 end loop;
             end loop;
-            exit when count > ints'high;
+            exit when count > ints'high;                         -- shouldn't happen, but paranoia
         end loop;
-                                           -- Now we have our header sorted. store it
+          -- Now we have our header sorted. store it
         width  := ints(1);
         height := ints(2);
-        deallocate(l);
-        return read_pixels(pgmfile, width, height);
+        -- now read the image pixels
+        x      := 0;
+        y      := 0;
+        ret    := new pixel_array(0 to width-1, 0 to height-1);
+        allpixels : loop
+            readline(pgmfile, l);
+            exit when l = null;
+            exit when l'length = 0;
+            loop
+                read(l, int, good);
+                exit           when not good;
+                ret(x, y) := int;
+                exit allpixels when x = width-1 and y = height-1;
+                x         := x + 1;
+                if x >= width then
+                    x := 0;
+                    y := y + 1;
+                end if;
+            end loop;
+        end loop allpixels;
+        assert (x = width-1 and y = height-1)
+            report "Don't seem to have read all the pixels I should have"
+            severity warning;
+        return ret;
     end function pgm_read;
     procedure pgm_write (
-        filename : in    string;
+        filename : in string;
         i        : in pixel_array) is
         file pgmfile : text;
-        variable l : line;
+        variable l   : line;
     begin  -- procedure pgm_write
         file_open(pgmfile, filename, write_mode);
         write(l, string'("P2"));
@@ -142,7 +134,7 @@ package body pgm is
         writeline(pgmfile, l);
         for y in i'range(2) loop
             for x in i'range(1) loop
-                write(l, str(i(x,y)) & " ");
+                write(l, str(i(x, y)) & " ");
             end loop;  -- x
             writeline(pgmfile, l);
         end loop;  -- y
@@ -159,10 +151,10 @@ package body pgm is
         assert_equal(prefix & "(height)", expected'length(2), got'length(2), level);
         for y in expected'range(2) loop
             for x in expected'range(1) loop
-                assert expected(x,y)=got(x,y)
+                assert expected(x, y) = got(x, y)
                     report prefix & " (" & str(x) & "," & str(y) & ")" &
-                    str(expected(x,y)) & " /= " & str(got(x,y))
-                        severity level;
+                    str(expected(x, y)) & " /= " & str(got(x, y))
+                    severity level;
             end loop;  -- x
         end loop;  -- y
     end procedure assert_equal;
@@ -172,7 +164,7 @@ package body pgm is
     begin  -- function transpose
         for i1 in i'range(1) loop
             for i2 in i'range(2) loop
-                ret(i2,i1) := i(i1,i2);
+                ret(i2, i1) := i(i1, i2);
             end loop;  -- i2
         end loop;  -- i1
         return ret;
@@ -210,12 +202,12 @@ begin  -- architecture test
         assert i = null report "Binary pixels should be null" severity error;
 
         -- Now create an image from scratch - a letter M
-        blacksquare(1,1) := 255; blacksquare(5,1) := 255;
-        blacksquare(1,2) := 255; blacksquare(2,2) := 255; blacksquare(4,2) := 255; blacksquare(5,2) := 255;
-        blacksquare(1,3) := 255; blacksquare(3,3) := 255; blacksquare(5,3) := 255;
-        blacksquare(1,4) := 255; blacksquare(5,4) := 255;
-        blacksquare(1,5) := 255; blacksquare(5,5) := 255;
-        blacksquare(1,6) := 255; blacksquare(5,6) := 255;
+        blacksquare(1, 1) := 255; blacksquare(5, 1) := 255;
+        blacksquare(1, 2) := 255; blacksquare(2, 2) := 255; blacksquare(4, 2) := 255; blacksquare(5, 2) := 255;
+        blacksquare(1, 3) := 255; blacksquare(3, 3) := 255; blacksquare(5, 3) := 255;
+        blacksquare(1, 4) := 255; blacksquare(5, 4) := 255;
+        blacksquare(1, 5) := 255; blacksquare(5, 5) := 255;
+        blacksquare(1, 6) := 255; blacksquare(5, 6) := 255;
         pgm_write("test_write.pgm", blacksquare);
         report "End of tests" severity note;
         wait;
